@@ -18,6 +18,7 @@ model User {
   id        String    @id @default(uuid())
   email     String    @unique
   password  String
+  role      String    @default("user")
   name      String?
   phone     String?
 
@@ -84,7 +85,7 @@ model CartItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([cartId, productId]) // one product appears once per cart
+  @@unique([cartId, productId])
   @@index([productId])
 }
 
@@ -145,6 +146,6 @@ model OrderItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([orderId, productId]) // one product appears once per order
+  @@unique([orderId, productId])
   @@index([productId])
 }
