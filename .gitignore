@@ -1,0 +1,90 @@
+# ================================
+# Dependencies
+# ================================
+node_modules/
+bower_components/
+
+# ================================
+# Build / Output
+# ================================
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+
+# ================================
+# Environment variables
+# ================================
+.env
+.env.*
+!.env.example
+
+# ================================
+# Logs
+# ================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ================================
+# OS generated files
+# ================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ================================
+# Editor / IDE settings
+# ================================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# ================================
+# Cache & temp files
+# ================================
+.cache/
+.tmp/
+temp/
+.eslintcache
+
+# ================================
+# TypeScript
+# ================================
+*.tsbuildinfo
+
+# ================================
+# Package manager files (optional)
+# ================================
+# Uncomment if you don’t want lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ================================
+# Framework specific
+# ================================
+.next/
+.nuxt/
+.svelte-kit/
+.vercel/
+.netlify/
+
+# ================================
+# Backend (if using Node / Express)
+# ================================
+uploads/
+db/*.sqlite
+db/*.db
+
+# ================================
+# Testing
+# ================================
+/coverage/
