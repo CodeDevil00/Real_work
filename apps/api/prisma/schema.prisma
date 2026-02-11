@@ -15,72 +15,69 @@ enum OrderStatus {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  password  String
-  role      String    @default("user")
-  name      String?
-  phone     String?
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  role     String  @default("user")
+  name     String?
+  phone    String?
 
   addresses Address[]
   cart      Cart?
   orders    Order[]
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
-  id        String    @id @default(uuid())
-  name      String    @unique
+  id        String    @id @default(cuid())
+  name      String
   slug      String    @unique
-
   products  Product[]
-
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
 
 model Product {
-  id          String     @id @default(uuid())
+  id          String    @id @default(cuid())
   title       String
-  slug        String     @unique
   description String?
-  price       Decimal    @db.Decimal(10, 2)
-  stock       Int        @default(0)
-  imageUrl    String?
+  price       Int // store in paise/cents (e.g., 19999 = ₹199.99)
+  mrp         Int?
+  stockQty    Int       @default(0)
+  brand       String?
+  images      String[] // simple for now
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  categoryId  String
-  category    Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-
-  orderItems  OrderItem[]
-  cartItems   CartItem[]
-
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   @@index([categoryId])
-  @@index([price])
+  @@index([title])
 }
 
 model Cart {
-  id        String     @id @default(uuid())
-  userId    String     @unique
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items     CartItem[]
+  id     String     @id @default(uuid())
+  userId String     @unique
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CartItem {
-  id        String   @id @default(uuid())
+  id        String @id @default(uuid())
   cartId    String
   productId String
-  quantity  Int      @default(1)
+  quantity  Int    @default(1)
 
-  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -90,9 +87,9 @@ model CartItem {
 }
 
 model Address {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   fullName   String
   phone      String
@@ -101,32 +98,32 @@ model Address {
   city       String
   state      String
   postalCode String
-  country    String   @default("India")
-  isDefault  Boolean  @default(false)
+  country    String  @default("India")
+  isDefault  Boolean @default(false)
 
-  orders     Order[]
+  orders Order[]
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model Order {
-  id         String      @id @default(uuid())
-  userId     String
-  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  addressId  String
-  address    Address     @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  addressId String
+  address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
 
-  status     OrderStatus @default(PENDING)
-  total      Decimal     @db.Decimal(10, 2)
+  status OrderStatus @default(PENDING)
+  total  Decimal     @db.Decimal(10, 2)
 
-  items      OrderItem[]
+  items OrderItem[]
 
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([addressId])
@@ -134,14 +131,14 @@ model Order {
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   orderId   String
   productId String
   quantity  Int
-  unitPrice Decimal  @db.Decimal(10, 2)
+  unitPrice Decimal @db.Decimal(10, 2)
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

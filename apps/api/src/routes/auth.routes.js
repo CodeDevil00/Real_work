@@ -1,10 +1,9 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { z, optional, email, hash } = require("zod");
+const { z } = require("zod");
 const prisma = require("../prisma");
 const authMiddleware = require("../middleware/auth.middleware");
-const { ca } = require("zod/v4/locales");
 
 const router = express.Router();
 
@@ -20,15 +19,15 @@ const strongPassword = z
   .refine((val) => !/\s/.test(val), "Password must not contain spaces");
 
 const registerSchema = z.object({
-  name: z.string().min(2).optional(),
-  phone: z.string().min(8).max(15).optional(),
+  name: z.string().min(2),
+  phone: z.string().min(8).max(15),
   email: z.string().email(),
   password: strongPassword,
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: strongPassword,
+  password: z.string().min(1, "Password is required"),
 });
 
 // POST /auth/register
@@ -71,7 +70,7 @@ router.post("/register", async (req, res) => {
 
     return res
       .status(201)
-      .json({ message: "Ragistered Succesfully", user, token });
+      .json({ message: "Registered Succesfully", user, token });
   } catch (err) {
     if (err?.issues) {
       return res
@@ -134,22 +133,15 @@ router.get("/me", authMiddleware, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        phone: true,
-        role: true,
-        createdAt: true,
-      },
+      select: { id: true, email: true, name: true, phone: true, role: true, createdAt: true },
     });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    return res.json({ user });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
