@@ -42,6 +42,7 @@ model Category {
 model Product {
   id          String    @id @default(cuid())
   title       String
+  slug        String?   @unique
   description String?
   price       Int // store in paise/cents (e.g., 19999 = ₹199.99)
   mrp         Int?
