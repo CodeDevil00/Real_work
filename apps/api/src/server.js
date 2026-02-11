@@ -7,6 +7,9 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth.routes');
 
+const categoryRoutes = require('./routes/category.routes');
+const productRoutes = require('./routes/product.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
@@ -23,6 +26,15 @@ app.get("/health", (req, res) => {
 
 // Auth routes
 app.use("/auth", authRoutes);
+
+// Category routes
+app.use("/categories", categoryRoutes);
+
+// Product routes
+app.use("/products", productRoutes);
+
+// Admin routes
+app.use("/admin", adminRoutes);
 
 // 404 handler
 app .use((req, res) => {
