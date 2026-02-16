@@ -5,6 +5,13 @@ const morgan = require('morgan');
 
 require('dotenv').config();
 
+const authRoutes = require('./routes/auth.routes');
+
+const categoryRoutes = require('./routes/category.routes');
+const productRoutes = require('./routes/product.routes');
+const adminRoutes = require('./routes/admin.routes');
+
+const cartRoutes = require('./routes/cart.routes');
 
 const app = express();
 
@@ -17,6 +24,26 @@ app.use(express.json());
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "OK" , message: "API is running" });
 
+});
+
+// Auth routes
+app.use("/auth", authRoutes);
+
+// Category routes
+app.use("/categories", categoryRoutes);
+
+// Product routes
+app.use("/products", productRoutes);
+
+// Admin routes
+app.use("/admin", adminRoutes);
+
+// Cart routes
+app.use("/cart", cartRoutes);
+
+// 404 handler
+app .use((req, res) => {
+    res.status(404).json({ error: "Route not found" });
 });
 
 //port
