@@ -11,6 +11,8 @@ const categoryRoutes = require('./routes/category.routes');
 const productRoutes = require('./routes/product.routes');
 const adminRoutes = require('./routes/admin.routes');
 
+const cartRoutes = require('./routes/cart.routes');
+
 const app = express();
 
 app.use(cors());
@@ -35,6 +37,9 @@ app.use("/products", productRoutes);
 
 // Admin routes
 app.use("/admin", adminRoutes);
+
+// Cart routes
+app.use("/cart", cartRoutes);
 
 // 404 handler
 app .use((req, res) => {

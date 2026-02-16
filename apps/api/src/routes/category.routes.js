@@ -11,7 +11,7 @@ router.get("/", async (req, res) => {
         orderBy : { name: "asc" },
         select: {id: true, name: true, slug: true}
     });
-    res,json({ categories });
+    res.json({ categories });
 });
 
 module.exports = router;
