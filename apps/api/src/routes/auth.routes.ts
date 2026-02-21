@@ -1,11 +1,25 @@
-const express = require("express");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const { z } = require("zod");
-const prisma = require("../prisma");
-const authMiddleware = require("../middleware/auth.middleware");
+// const express = require("express");
+// const bcrypt = require("bcrypt");
+// const jwt = require("jsonwebtoken");
+// const { z } = require("zod");
+// const prisma = require("../prisma");
+// const authMiddleware = require("../middleware/auth.middleware");
 
-const router = express.Router();
+import express, { Router } from "express";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { z } from "zod";
+import prisma from "../prisma";
+import authMiddleware from "../middleware/auth.middleware";
+import { mustGetEnv } from "../utils/env";
+
+
+
+// const router = express.Router();
+const router: Router = express.Router();
+
+const JWT_SECRET = mustGetEnv("JWT_SECRET");
+
 
 // User registration
 const strongPassword = z
@@ -64,7 +78,7 @@ router.post("/register", async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" },
     );
 
@@ -72,7 +86,7 @@ router.post("/register", async (req, res) => {
       .status(201)
       .json({ message: "Registered Succesfully", user, token });
   } catch (err) {
-    if (err?.issues) {
+    if (err instanceof z.ZodError) {
       return res
         .status(400)
         .json({ message: "Validation Error", errors: err.issues });
@@ -101,7 +115,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" },
     );
 
@@ -117,10 +131,10 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    if (err?.issues) {
+    if (err instanceof z.ZodError) {
       return res
         .status(400)
-        .json({ message: "Validation Error", issues: err.issues });
+        .json({ message: "Validation Error", errors: err.issues });
     }
     console.error(err);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -131,8 +145,9 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", authMiddleware, async (req, res) => {
   try {
+    const userId = req.user?.id;
     const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
+      where: { id: userId },
       select: { id: true, email: true, name: true, phone: true, role: true, createdAt: true },
     });
 
@@ -145,4 +160,5 @@ router.get("/me", authMiddleware, async (req, res) => {
   }
 });
 
-module.exports = router;
+// module.exports = router;
+export default router;

@@ -1,7 +1,12 @@
-const express = require('express');
-const {z} = require('zod');
-const prisma = require('../prisma');
-const auth = require('../middleware/auth.middleware');
+// const express = require('express');
+// const {z} = require('zod');
+// const prisma = require('../prisma');
+// const auth = require('../middleware/auth.middleware');
+
+import express from "express";
+import { z } from "zod";
+import prisma from "../prisma";
+import auth from "../middleware/auth.middleware";
 
 const router = express.Router();
 
@@ -9,7 +14,7 @@ const router = express.Router();
 router.use(auth);
 
 // helper: get or create cart for user
-async function getOrCreateCart(userId) {
+async function getOrCreateCart(userId : string) {
     let cart = await prisma.cart.findUnique({
         where: { userId },
         select: {id: true , userId: true},
@@ -26,8 +31,8 @@ return cart;
 
 // GET /cart -> full cart with items + product
 router.get("/", async (req, res) => {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+    const userId = req.user?.id;
+    const cart = await getOrCreateCart(userId as string);
 
     const fullcart = await prisma.cart.findUnique({
         where: { id: cart.id },
@@ -50,6 +55,9 @@ router.get("/", async (req, res) => {
     },
     });
 
+    if (!fullcart) {
+        return res.status(404).json({ message: "Cart not found" });
+    }
 
     // compute totals 
     const subtotal = fullcart.items.reduce((sum, it) => sum + it.quantity * it.product.price, 0);
@@ -60,7 +68,7 @@ router.get("/", async (req, res) => {
 //  POST /cart/items -> { productId, quantity}
 
 router.post("/items", async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.user?.id;
     const schema = z.object({
         productId: z.string().min(1),
         quantity: z.number().int().min(1).max(50).default(1),
@@ -77,7 +85,7 @@ router.post("/items", async (req, res) => {
         return res.status(404).json({ error: "Product not found" });
     }
 
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(userId as string);
 
     const existing = await prisma.cartItem.findUnique({
         where: { cartId_productId: { cartId: cart.id, productId } },
@@ -116,7 +124,7 @@ router.post("/items", async (req, res) => {
 // PATCH /cart/items/:itemId -> { quantity }
 
 router.patch("/items/:itemId", async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.user?.id;
 
     const schema = z.object({
         quantity: z.number().int().min(1).max(50),
@@ -127,7 +135,7 @@ router.patch("/items/:itemId", async (req, res) => {
     const { itemId } = req.params;
 
     // ensure item belongs to user's cart
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(userId as string);
 
     const item = await prisma.cartItem.findUnique({
         where: { id: itemId },
@@ -153,10 +161,10 @@ router.patch("/items/:itemId", async (req, res) => {
 // DELETE /cart/items/:itemId -> remove item from cart
 
 router.delete("/items/:itemId", async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.user?.id;
     const { itemId } = req.params;
 
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(userId as string);
 
     const item = await prisma.cartItem.findUnique({
         where: { id: itemId },
@@ -175,8 +183,9 @@ router.delete("/items/:itemId", async (req, res) => {
 // optional : DELETE /cart/clear
 
 router.delete("/clear", async (req, res) => {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+
+    const userId = req.user?.id;
+    const cart = await getOrCreateCart(userId as string);
 
     await prisma.cartItem.deleteMany({
         where: { cartId: cart.id },
@@ -185,4 +194,6 @@ router.delete("/clear", async (req, res) => {
     res.json({ message: "Cart cleared" });
 });
 
-module.exports = router;
+// module.exports = router;
+
+export default router;

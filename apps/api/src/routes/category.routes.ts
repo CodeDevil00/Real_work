@@ -1,6 +1,11 @@
-const express = require("express")
-const prisma = require("../prisma");
-const { json } = require("zod");
+// const express = require("express")
+// const prisma = require("../prisma");
+// const { json } = require("zod");
+
+import express from "express";
+import prisma from "../prisma";
+import { z } from "zod";
+
 
 const router = express.Router();
 
@@ -14,4 +19,6 @@ router.get("/", async (req, res) => {
     res.json({ categories });
 });
 
-module.exports = router;
+// module.exports = router;
+
+export default router;

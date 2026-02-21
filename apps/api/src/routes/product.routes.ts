@@ -1,11 +1,10 @@
-const express = require("express");
-const prisma = require("../prisma");
+import express, { Request, Response } from "express";
+import prisma from "../prisma";
 
 const router = express.Router();
 
 // GET /products?search=&categorySlug=&minPrice=&maxPrice=&sort=newest|price_asc|price_desc&page=1&limit=12
-
-router.get("/", async (req, res) => {
+router.get("/", async (req: Request, res: Response) => {
   const {
     search = "",
     categorySlug,
@@ -14,10 +13,18 @@ router.get("/", async (req, res) => {
     sort = "newest",
     page = 1,
     limit = 12,
-  } = req.query;
+  } = req.query as {
+    search?: string;
+    categorySlug?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+    page?: string | number;
+    limit?: string | number;
+  };
 
-  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
-  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 50);
+  const pageNum = Math.max(parseInt(String(page), 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(String(limit), 10) || 12, 1), 50);
   const skip = (pageNum - 1) * limitNum;
 
   const where = {
@@ -25,8 +32,8 @@ router.get("/", async (req, res) => {
       search
         ? {
             OR: [
-              { title: { contains: search, mode: "insensitive" } },
-              { brand: { contains: search, mode: "insensitive" } },
+              { title: { contains: search, mode: "insensitive" as const } },
+              { brand: { contains: search, mode: "insensitive" as const } },
             ],
           }
         : {},
@@ -38,10 +45,10 @@ router.get("/", async (req, res) => {
 
   const orderBy =
     sort === "price_asc"
-      ? { price: "asc" }
+      ? ({ price: "asc" } as const)
       : sort === "price_desc"
-        ? { price: "desc" }
-        : { createdAt: "desc" };
+      ? ({ price: "desc" } as const)
+      : ({ createdAt: "desc" } as const);
 
   const [items, total] = await Promise.all([
     prisma.product.findMany({
@@ -54,7 +61,7 @@ router.get("/", async (req, res) => {
     prisma.product.count({ where }),
   ]);
 
-  res.json({
+  return res.json({
     items,
     pagination: {
       page: pageNum,
@@ -66,14 +73,14 @@ router.get("/", async (req, res) => {
 });
 
 // GET /products/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req: Request, res: Response) => {
   const product = await prisma.product.findUnique({
     where: { id: req.params.id },
     include: { category: { select: { id: true, name: true, slug: true } } },
   });
 
   if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json({ product });
+  return res.json({ product });
 });
 
-module.exports = router;
+export default router;

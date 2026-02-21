@@ -1,10 +1,18 @@
-const express = require("express");
-const { z } = require("zod");
-const prisma = require("../prisma");
-const auth = require("../middleware/auth.middleware");
-const role = require("../middleware/role.middleware");
-const { ca } = require("zod/v4/locales");
-const slugify = require("../utils/slugify");
+// const express = require("express");
+// const { z } = require("zod");
+// const prisma = require("../prisma");
+// const auth = require("../middleware/auth.middleware");
+// const role = require("../middleware/role.middleware");
+// const { ca } = require("zod/v4/locales");
+// const slugify = require("../utils/slugify");
+
+import express from "express";
+import { z, ZodError } from "zod";
+import prisma from "../prisma";
+import { Prisma } from "@prisma/client";
+import auth from "../middleware/auth.middleware";
+import role from "../middleware/role.middleware";
+import slugify from "../utils/slugify";
 
 const router = express.Router();
 
@@ -29,7 +37,7 @@ router.post("/categories", async (req, res) => {
 
     res.status(201).json({ category });
   } catch (err) {
-    if (err?.issues) {
+    if (err instanceof ZodError) {
       return res
         .status(400)
         .json({ message: "Validation Error", errors: err.issues });
@@ -84,7 +92,7 @@ router.post("/products", async (req, res) => {
 
     return res.status(201).json({ product });
   } catch (err) {
-    if (err?.issues) {
+    if (err instanceof ZodError) {
       return res
         .status(400)
         .json({ message: "Validation Error", errors: err.issues });
@@ -92,14 +100,36 @@ router.post("/products", async (req, res) => {
     console.error(err);
 
     // if slug uqiueness check failed
-    if (err.code === "P2002" && err.meta?.target?.includes("slug")) {
+  //   if (err.code === "P2002" && err.meta?.target?.includes("slug")) {
+  //     return res
+  //       .status(409)
+  //       .json({ message: "Slug already in use, try a different one" });
+  //   }
+
+  //   return res.status(500).json({ error: "Internal Server Error" });
+  // }
+  
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+  // Unique constraint violation
+  if (err.code === "P2002") {
+    const target = (err.meta?.target ?? []) as string[] | string;
+
+    const hasSlug =
+      Array.isArray(target) ? target.includes("slug") : String(target).includes("slug");
+
+    if (hasSlug) {
       return res
         .status(409)
         .json({ message: "Slug already in use, try a different one" });
     }
 
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(409).json({ message: "Unique constraint failed" });
+  }
+}
+
+console.error(err);
+return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-module.exports = router;
+export default router;
