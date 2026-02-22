@@ -9,7 +9,7 @@
 import express from "express";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { z , ZodError } from "zod";
+import { z } from "zod";
 import prisma from "../prisma";
 import auth from "../middleware/auth.middleware";
 import { mustGetEnv } from "../utils/env";
@@ -29,8 +29,17 @@ router.post("/create-order", async (req, res) => {
       orderId: z.string().min(1),
     });
 
-    const { orderId } = schema.parse(req.body);
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Validation Error",
+        errors: parsed.error.issues,
+      });
+    }
+
+    const { orderId } = parsed.data;
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, userId },
@@ -79,54 +88,69 @@ router.post("/create-order", async (req, res) => {
       appOrderId: order.id,
     });
   } catch (err) {
-    if (err instanceof ZodError) {
-      console.error("Create-order error:", err);
-      return res.status(500).json({
-        message: "Create-order failed",
-        error: err.issues[0]?.message || String(err),
-      });
-    }
-
+    console.error("Create-order error:", err);
+    return res.status(500).json({ message: "Create-order failed" });
   }
 });
 
 // 2) POST /payments/verify
 // body: { appOrderId, razorpay_order_id, razorpay_payment_id, razorpay_signature }
 router.post("/verify", async (req, res) => {
-  const schema = z.object({
-    appOrderId: z.string().min(1),
-    razorpay_order_id: z.string().min(1),
-    razorpay_payment_id: z.string().min(1),
-    razorpay_signature: z.string().min(1),
-  });
+  try {
+    const schema = z.object({
+      appOrderId: z.string().min(1),
+      razorpay_order_id: z.string().min(1),
+      razorpay_payment_id: z.string().min(1),
+      razorpay_signature: z.string().min(1),
+    });
 
-  const data = schema.parse(req.body);
-  const userId = req.user?.id;
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Validation Error",
+        errors: parsed.error.issues,
+      });
+    }
 
-  // Verify the signature
-  const signPayload = `${data.razorpay_order_id}|${data.razorpay_payment_id}`;
-  const expectedSignature = crypto
-    .createHmac("sha256", mustGetEnv("RAZORPAY_KEY_SECRET"))
-    .update(signPayload)
-    .digest("hex");
+    const data = parsed.data;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-  if (expectedSignature !== data.razorpay_signature) {
-    return res.status(400).json({ message: "Invalid signature" });
+    // Verify the signature from Razorpay callback data.
+    const signPayload = `${data.razorpay_order_id}|${data.razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac("sha256", mustGetEnv("RAZORPAY_KEY_SECRET"))
+      .update(signPayload)
+      .digest("hex");
+
+    if (expectedSignature !== data.razorpay_signature) {
+      return res.status(400).json({ message: "Invalid signature" });
+    }
+
+    // Bind callback to the exact app order we created server-side.
+    const rpOrder = await razorpay.orders.fetch(data.razorpay_order_id);
+    const notes = (rpOrder.notes ?? {}) as Record<string, string | undefined>;
+    if (notes.appOrderId !== data.appOrderId) {
+      return res.status(400).json({ message: "Order mapping mismatch" });
+    }
+
+    // Mark order as PAID (only if belongs to the logged in user)
+    const updated = await prisma.order.updateMany({
+      where: { id: data.appOrderId, userId, status: "PENDING" },
+      data: { status: "PAID" },
+    });
+
+    if (updated.count === 0) {
+      return res
+        .status(404)
+        .json({ message: "Order not found or already updated" });
+    }
+
+    return res.json({ message: "Payment verified. Order marked PAID." });
+  } catch (err) {
+    console.error("Verify payment error:", err);
+    return res.status(500).json({ message: "Payment verification failed" });
   }
-
-  // Mark order as PAID (only if belongs to the logged in user)
-  const updated = await prisma.order.updateMany({
-    where: { id: data.appOrderId, userId, status: "PENDING" },
-    data: { status: "PAID" },
-  });
-
-  if (updated.count === 0) {
-    return res
-      .status(404)
-      .json({ message: "Order not found or already updated" });
-  }
-
-  res.json({ message: "Payment verified. Order marked PAID." });
 });
 
 // module.exports = router;

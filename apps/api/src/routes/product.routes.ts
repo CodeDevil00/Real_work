@@ -74,8 +74,12 @@ router.get("/", async (req: Request, res: Response) => {
 
 // GET /products/:id
 router.get("/:id", async (req: Request, res: Response) => {
+  const rawId = req.params.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (!id) return res.status(400).json({ message: "Product id is required" });
+
   const product = await prisma.product.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: { category: { select: { id: true, name: true, slug: true } } },
   });
 

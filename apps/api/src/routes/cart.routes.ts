@@ -32,7 +32,8 @@ return cart;
 // GET /cart -> full cart with items + product
 router.get("/", async (req, res) => {
     const userId = req.user?.id;
-    const cart = await getOrCreateCart(userId as string);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const cart = await getOrCreateCart(userId);
 
     const fullcart = await prisma.cart.findUnique({
         where: { id: cart.id },
@@ -69,12 +70,19 @@ router.get("/", async (req, res) => {
 
 router.post("/items", async (req, res) => {
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
     const schema = z.object({
         productId: z.string().min(1),
         quantity: z.number().int().min(1).max(50).default(1),
     });
 
-    const { productId, quantity } = schema.parse(req.body);
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ message: "Validation Error", errors: parsed.error.issues });
+    }
+
+    const { productId, quantity } = parsed.data;
 
     const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -85,7 +93,7 @@ router.post("/items", async (req, res) => {
         return res.status(404).json({ error: "Product not found" });
     }
 
-    const cart = await getOrCreateCart(userId as string);
+    const cart = await getOrCreateCart(userId);
 
     const existing = await prisma.cartItem.findUnique({
         where: { cartId_productId: { cartId: cart.id, productId } },
@@ -125,17 +133,23 @@ router.post("/items", async (req, res) => {
 
 router.patch("/items/:itemId", async (req, res) => {
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const schema = z.object({
         quantity: z.number().int().min(1).max(50),
     });
 
-    const { quantity } = schema.parse(req.body);
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ message: "Validation Error", errors: parsed.error.issues });
+    }
+
+    const { quantity } = parsed.data;
 
     const { itemId } = req.params;
 
     // ensure item belongs to user's cart
-    const cart = await getOrCreateCart(userId as string);
+    const cart = await getOrCreateCart(userId);
 
     const item = await prisma.cartItem.findUnique({
         where: { id: itemId },
@@ -162,9 +176,10 @@ router.patch("/items/:itemId", async (req, res) => {
 
 router.delete("/items/:itemId", async (req, res) => {
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const { itemId } = req.params;
 
-    const cart = await getOrCreateCart(userId as string);
+    const cart = await getOrCreateCart(userId);
 
     const item = await prisma.cartItem.findUnique({
         where: { id: itemId },
@@ -185,7 +200,8 @@ router.delete("/items/:itemId", async (req, res) => {
 router.delete("/clear", async (req, res) => {
 
     const userId = req.user?.id;
-    const cart = await getOrCreateCart(userId as string);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const cart = await getOrCreateCart(userId);
 
     await prisma.cartItem.deleteMany({
         where: { cartId: cart.id },

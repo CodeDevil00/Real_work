@@ -3,19 +3,19 @@
 // const prisma = require("../prisma");
 // const auth = require("../middleware/auth.middleware");
 
-
 import express from "express";
 import { z } from "zod";
 import prisma from "../prisma";
 import auth from "../middleware/auth.middleware";
 
-
 const router = express.Router();
 router.use(auth);
 
+const STOCK_CONFLICT_PREFIX = "INSUFFICIENT_STOCK:";
+
 // Helper: get user's cart with items + product
-async function getFullCart(userId : string) {
-  const cart = await prisma.cart.findUnique({
+async function getFullCart(userId: string) {
+  return prisma.cart.findUnique({
     where: { userId },
     include: {
       items: {
@@ -24,7 +24,7 @@ async function getFullCart(userId : string) {
             select: {
               id: true,
               title: true,
-              price: true,     // Int (paise)
+              price: true, // Int (paise)
               stockQty: true,
             },
           },
@@ -32,10 +32,9 @@ async function getFullCart(userId : string) {
       },
     },
   });
-  return cart;
 }
 
-// 1) POST /orders/address  -> create a new address (simple)
+// 1) POST /orders/address -> create a new address
 router.post("/address", async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -55,7 +54,7 @@ router.post("/address", async (req, res) => {
 
     const data = schema.parse(req.body);
 
-    // if default, unset old default
+    // If default=true, unset previous default address first.
     if (data.isDefault) {
       await prisma.address.updateMany({
         where: { userId, isDefault: true },
@@ -65,7 +64,7 @@ router.post("/address", async (req, res) => {
 
     const address = await prisma.address.create({
       data: {
-        userId, 
+        userId,
         fullName: data.fullName,
         phone: data.phone,
         line1: data.line1,
@@ -81,7 +80,9 @@ router.post("/address", async (req, res) => {
     return res.status(201).json({ message: "Address created", address });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ message: "Validation Error", errors: err.issues });
+      return res
+        .status(400)
+        .json({ message: "Validation Error", errors: err.issues });
     }
     console.error(err);
     return res.status(500).json({ message: "Server error" });
@@ -91,14 +92,16 @@ router.post("/address", async (req, res) => {
 // 2) GET /orders/addresses -> list my addresses
 router.get("/addresses", async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
   const addresses = await prisma.address.findMany({
     where: { userId },
     orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
   });
-  res.json({ addresses });
+  return res.json({ addresses });
 });
 
-// 3) POST /orders  -> create order from cart + addressId
+// 3) POST /orders -> create order from cart + addressId
 router.post("/", async (req, res) => {
   try {
     const schema = z.object({
@@ -110,7 +113,7 @@ router.post("/", async (req, res) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    // Validate address belongs to user
+    // Validate address belongs to user.
     const address = await prisma.address.findFirst({
       where: { id: addressId, userId },
       select: { id: true },
@@ -122,28 +125,30 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Cart is empty" });
     }
 
-    // Check stock
-    for (const item of cart.items) {
-      if (item.quantity > item.product.stockQty) {
-        return res.status(400).json({
-          message: `Not enough stock for ${item.product.title}`,
-        });
-      }
-    }
-
     // total in paise (Int)
     const totalInt = cart.items.reduce(
       (sum, item) => sum + item.quantity * item.product.price,
-      0
+      0,
     );
 
     // store as Decimal string
     const totalDecimal = (totalInt / 100).toFixed(2);
 
     const result = await prisma.$transaction(async (tx) => {
+      for (const it of cart.items) {
+        const updatedStock = await tx.product.updateMany({
+          where: { id: it.product.id, stockQty: { gte: it.quantity } },
+          data: { stockQty: { decrement: it.quantity } },
+        });
+
+        if (updatedStock.count === 0) {
+          throw new Error(`${STOCK_CONFLICT_PREFIX}${it.product.title}`);
+        }
+      }
+
       const order = await tx.order.create({
         data: {
-          userId, // ✅ now string
+          userId,
           addressId,
           status: "PENDING",
           total: totalDecimal,
@@ -158,25 +163,29 @@ router.post("/", async (req, res) => {
         include: { items: true },
       });
 
-      // Reduce stock
-      for (const it of cart.items) {
-        await tx.product.update({
-          where: { id: it.product.id },
-          data: { stockQty: { decrement: it.quantity } },
-        });
-      }
-
       // Clear cart
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
       return order;
     });
 
-    return res.status(201).json({ message: "Order placed (PENDING)", order: result });
+    return res
+      .status(201)
+      .json({ message: "Order placed (PENDING)", order: result });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ message: "Validation Error", errors: err.issues });
+      return res
+        .status(400)
+        .json({ message: "Validation Error", errors: err.issues });
     }
+
+    if (err instanceof Error && err.message.startsWith(STOCK_CONFLICT_PREFIX)) {
+      const productTitle = err.message.slice(STOCK_CONFLICT_PREFIX.length);
+      return res.status(409).json({
+        message: `Not enough stock for ${productTitle}`,
+      });
+    }
+
     console.error(err);
     return res.status(500).json({ message: "Server error" });
   }
@@ -185,6 +194,7 @@ router.post("/", async (req, res) => {
 // 4) GET /orders -> list my orders
 router.get("/", async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   const orders = await prisma.order.findMany({
     where: { userId },
@@ -198,12 +208,13 @@ router.get("/", async (req, res) => {
     },
   });
 
-  res.json({ orders });
+  return res.json({ orders });
 });
 
 // 5) GET /orders/:id -> order detail
 router.get("/:id", async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
   const orderId = req.params.id;
 
   const order = await prisma.order.findFirst({
@@ -222,7 +233,7 @@ router.get("/:id", async (req, res) => {
 
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  res.json({ order });
+  return res.json({ order });
 });
 
 // module.exports = router;

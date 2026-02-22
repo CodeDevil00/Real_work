@@ -1,6 +1,6 @@
-import {api, authHeader} from "./api";
+import { api, authHeader } from "./api";
 
-type CreateOrderResp = {
+type CreateOrderResponse = {
   keyId: string;
   razorpayOrderId: string;
   amount: number;
@@ -8,54 +8,59 @@ type CreateOrderResp = {
   appOrderId: string;
 };
 
-export async function payWithRazorpay(appOrderId: string, token: string) {
-  // 1) create Razorpay order from backend
-  const { data } = await api.post<CreateOrderResp>(
+type VerifyPayload = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+export async function payWithRazorpay(appOrderId: string, token: string): Promise<void> {
+  const { data } = await api.post<CreateOrderResponse>(
     "/payments/create-order",
     { orderId: appOrderId },
-    authHeader(token)
+    authHeader(token),
   );
 
-  // 2) open Razorpay Checkout
-  const options = {
-    key: data.keyId,
-    amount: data.amount,
-    currency: data.currency,
-    name: "E-Commerce",
-    description: "Order Payment",
-    order_id: data.razorpayOrderId,
-
-    handler: async function (response: any) {
-      // 3) verify payment on backend
-      await api.post(
-        "/payments/verify",
-        {
-          appOrderId: data.appOrderId,
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_signature: response.razorpay_signature,
-        },
-        authHeader(token)
-      );
-
-      alert("✅ Payment successful! Order marked PAID.");
-      // optionally refresh page / refetch order
-    },
-
-    modal: {
-      ondismiss: function () {
-        alert("Payment popup closed");
-      },
-    },
-
-    theme: { color: "#111827" },
-  };
-
-  if (!window.Razorpay) {
-    alert("Razorpay SDK not loaded. Check index.html script tag.");
-    return;
+  const Razorpay = window.Razorpay;
+  if (!Razorpay) {
+    throw new Error("Razorpay SDK was not loaded.");
   }
 
-  const rzp = new window.Razorpay(options);
-  rzp.open();
+  await new Promise<void>((resolve, reject) => {
+    const options = {
+      key: data.keyId,
+      amount: data.amount,
+      currency: data.currency,
+      name: "E-Commerce",
+      description: "Order Payment",
+      order_id: data.razorpayOrderId,
+      handler: async (response: VerifyPayload) => {
+        try {
+          await api.post(
+            "/payments/verify",
+            {
+              appOrderId: data.appOrderId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+            authHeader(token),
+          );
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      },
+      modal: {
+        ondismiss: () => reject(new Error("Payment cancelled by user.")),
+      },
+      theme: { color: "#1d4ed8" },
+    };
+
+    const instance = new Razorpay(options);
+    instance.on?.("payment.failed", (event: { error?: { description?: string } }) => {
+      reject(new Error(event.error?.description || "Payment failed."));
+    });
+    instance.open();
+  });
 }
