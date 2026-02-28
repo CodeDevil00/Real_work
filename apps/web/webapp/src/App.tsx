@@ -1,124 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
-import PayNowButton from "./components/PayNowButton";
+import AddressesPanel from "./components/AddressesPanel";
+import AuthPanel from "./components/AuthPanel";
+import CartPanel from "./components/CartPanel";
+import OrdersPanel from "./components/OrdersPanel";
+import ProductsPanel from "./components/ProductsPanel";
 import { api, authHeader, getApiErrorMessage } from "./lib/api";
-
-type NoticeType = "success" | "error" | "info";
-
-type Notice = {
-  type: NoticeType;
-  text: string;
-};
-
-type User = {
-  id: string;
-  email: string;
-  name: string | null;
-  phone: string | null;
-  role: string;
-};
-
-type Category = {
-  id: string;
-  name: string;
-  slug: string;
-};
-
-type Product = {
-  id: string;
-  title: string;
-  slug: string | null;
-  description: string | null;
-  price: number;
-  mrp: number | null;
-  stockQty: number;
-  brand: string | null;
-  images: string[];
-  category?: Category | null;
-};
-
-type ProductListResponse = {
-  items: Product[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-type CartItem = {
-  id: string;
-  quantity: number;
-  product: {
-    id: string;
-    title: string;
-    price: number;
-    mrp: number | null;
-    images: string[];
-    stockQty: number;
-    brand: string | null;
-  };
-};
-
-type CartPayload = {
-  cart: {
-    id: string;
-    userId: string;
-    items: CartItem[];
-  };
-  subtotal: number;
-};
-
-type Address = {
-  id: string;
-  fullName: string;
-  phone: string;
-  line1: string;
-  line2: string | null;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  isDefault: boolean;
-};
-
-type OrderSummary = {
-  id: string;
-  status: string;
-  total: string;
-  createdAt: string;
-  _count: { items: number };
-};
-
-type OrderDetail = {
-  id: string;
-  status: string;
-  total: string;
-  createdAt: string;
-  address: Address;
-  items: Array<{
-    id: string;
-    quantity: number;
-    unitPrice: string;
-    product: {
-      id: string;
-      title: string;
-      images: string[];
-      brand: string | null;
-    };
-  }>;
-};
+import type {
+  Address,
+  CartPayload,
+  Category,
+  Notice,
+  OrderDetail,
+  OrderSummary,
+  Product,
+  ProductListResponse,
+  User,
+} from "./types/app";
 
 const TOKEN_KEY = "token";
-
-function formatMoneyFromPaise(value: number) {
-  return `INR ${(value / 100).toFixed(2)}`;
-}
-
-function formatDecimalMoney(value: string) {
-  return `INR ${Number(value).toFixed(2)}`;
-}
 
 export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -180,6 +80,10 @@ export default function App() {
   const isLoggedIn = token.length > 0;
   const apiBase = useMemo(() => api.defaults.baseURL || "", []);
 
+  const setNoticeError = useCallback((error: unknown) => {
+    setNotice({ type: "error", text: getApiErrorMessage(error) });
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
@@ -191,9 +95,9 @@ export default function App() {
       const { data } = await api.get<{ categories: Category[] }>("/categories");
       setCategories(data.categories);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
-  }, []);
+  }, [setNoticeError]);
 
   const fetchProducts = useCallback(async () => {
     setProductsLoading(true);
@@ -210,21 +114,21 @@ export default function App() {
       setProducts(data.items);
       setPagination(data.pagination);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setProductsLoading(false);
     }
-  }, [filters.categorySlug, filters.limit, filters.page, filters.search, filters.sort]);
+  }, [filters.categorySlug, filters.limit, filters.page, filters.search, filters.sort, setNoticeError]);
 
   const fetchMe = useCallback(async () => {
     try {
       const { data } = await api.get<{ user: User }>("/auth/me", authHeader(token));
       setUser(data.user);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
       logout();
     }
-  }, [logout, token]);
+  }, [logout, setNoticeError, token]);
 
   const fetchCart = useCallback(async () => {
     if (!token) return;
@@ -238,11 +142,11 @@ export default function App() {
       }
       setCartQtyById(nextQty);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setCartLoading(false);
     }
-  }, [token]);
+  }, [setNoticeError, token]);
 
   const fetchAddresses = useCallback(async () => {
     if (!token) return;
@@ -255,9 +159,9 @@ export default function App() {
         return preferred.id;
       });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
-  }, [token]);
+  }, [setNoticeError, token]);
 
   const fetchOrders = useCallback(async () => {
     if (!token) return;
@@ -266,11 +170,11 @@ export default function App() {
       const { data } = await api.get<{ orders: OrderSummary[] }>("/orders", authHeader(token));
       setOrders(data.orders);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setOrdersLoading(false);
     }
-  }, [token]);
+  }, [setNoticeError, token]);
 
   const fetchOrderDetail = useCallback(async (orderId: string) => {
     if (!token) return;
@@ -278,11 +182,11 @@ export default function App() {
       const { data } = await api.get<{ order: OrderDetail }>(`/orders/${orderId}`, authHeader(token));
       setOrderDetail(data.order);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
-  }, [token]);
+  }, [setNoticeError, token]);
 
-  async function submitAuthForm() {
+  const submitAuthForm = useCallback(async () => {
     setIsAuthSubmitting(true);
     try {
       if (authMode === "register") {
@@ -313,11 +217,11 @@ export default function App() {
         setNotice({ type: "success", text: "Login successful." });
       }
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setIsAuthSubmitting(false);
     }
-  }
+  }, [authForm.email, authForm.name, authForm.password, authForm.phone, authMode, setNoticeError]);
 
   useEffect(() => {
     if (!notice) return;
@@ -357,18 +261,14 @@ export default function App() {
     }
 
     const quantity = Math.max(1, productQtyById[productId] || 1);
-
     setAddToCartLoading(productId);
+
     try {
-      await api.post(
-        "/cart/items",
-        { productId, quantity },
-        authHeader(token),
-      );
+      await api.post("/cart/items", { productId, quantity }, authHeader(token));
       await fetchCart();
       setNotice({ type: "success", text: "Item added to cart." });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setAddToCartLoading(null);
     }
@@ -379,15 +279,11 @@ export default function App() {
 
     const quantity = Math.max(1, cartQtyById[itemId] || 1);
     try {
-      await api.patch(
-        `/cart/items/${itemId}`,
-        { quantity },
-        authHeader(token),
-      );
+      await api.patch(`/cart/items/${itemId}`, { quantity }, authHeader(token));
       await fetchCart();
       setNotice({ type: "success", text: "Cart item updated." });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
   }
 
@@ -398,7 +294,7 @@ export default function App() {
       await fetchCart();
       setNotice({ type: "info", text: "Item removed from cart." });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
   }
 
@@ -409,7 +305,7 @@ export default function App() {
       await fetchCart();
       setNotice({ type: "info", text: "Cart cleared." });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     }
   }
 
@@ -437,7 +333,7 @@ export default function App() {
       await fetchAddresses();
       setNotice({ type: "success", text: "Address saved." });
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setAddressLoading(false);
     }
@@ -464,7 +360,7 @@ export default function App() {
       });
       await Promise.all([fetchOrders(), fetchCart()]);
     } catch (error) {
-      setNotice({ type: "error", text: getApiErrorMessage(error) });
+      setNoticeError(error);
     } finally {
       setPlacingOrder(false);
     }
@@ -483,451 +379,100 @@ export default function App() {
       {notice ? <p className={`notice ${notice.type}`}>{notice.text}</p> : null}
 
       <main className="panel-grid">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Auth</h2>
-            {isLoggedIn ? (
-              <button className="ghost" onClick={logout}>
-                Logout
-              </button>
-            ) : null}
-          </div>
+        <AuthPanel
+          isLoggedIn={isLoggedIn}
+          user={user}
+          authMode={authMode}
+          authForm={authForm}
+          isAuthSubmitting={isAuthSubmitting}
+          onAuthModeChange={setAuthMode}
+          onAuthFormChange={(field, value) =>
+            setAuthForm((prev) => ({ ...prev, [field]: value }))
+          }
+          onSubmit={() => void submitAuthForm()}
+          onLogout={logout}
+          onRefreshProfile={() => void fetchMe()}
+        />
 
-          {!isLoggedIn ? (
-            <div className="stack">
-              <div className="auth-switch">
-                <button
-                  className={authMode === "login" ? "tab active" : "tab"}
-                  onClick={() => setAuthMode("login")}
-                >
-                  Login
-                </button>
-                <button
-                  className={authMode === "register" ? "tab active" : "tab"}
-                  onClick={() => setAuthMode("register")}
-                >
-                  Register
-                </button>
-              </div>
+        <ProductsPanel
+          categories={categories}
+          products={products}
+          productsLoading={productsLoading}
+          filters={filters}
+          pagination={{ page: pagination.page, totalPages: pagination.totalPages }}
+          productQtyById={productQtyById}
+          addToCartLoading={addToCartLoading}
+          onRefresh={() => void fetchProducts()}
+          onSearchChange={(value) =>
+            setFilters((prev) => ({ ...prev, page: 1, search: value }))
+          }
+          onCategoryChange={(value) =>
+            setFilters((prev) => ({ ...prev, page: 1, categorySlug: value }))
+          }
+          onSortChange={(value) =>
+            setFilters((prev) => ({ ...prev, page: 1, sort: value }))
+          }
+          onProductQtyChange={(productId, value) =>
+            setProductQtyById((prev) => ({ ...prev, [productId]: value }))
+          }
+          onAddToCart={(productId) => void addToCart(productId)}
+          onPrevPage={() =>
+            setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))
+          }
+          onNextPage={() =>
+            setFilters((prev) => ({
+              ...prev,
+              page: Math.min(pagination.totalPages, prev.page + 1),
+            }))
+          }
+        />
 
-              {authMode === "register" ? (
-                <>
-                  <label>
-                    Name
-                    <input
-                      value={authForm.name}
-                      onChange={(event) =>
-                        setAuthForm((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                      placeholder="Your name"
-                    />
-                  </label>
-                  <label>
-                    Phone
-                    <input
-                      value={authForm.phone}
-                      onChange={(event) =>
-                        setAuthForm((prev) => ({ ...prev, phone: event.target.value }))
-                      }
-                      placeholder="9999999999"
-                    />
-                  </label>
-                </>
-              ) : null}
+        <CartPanel
+          isLoggedIn={isLoggedIn}
+          cartLoading={cartLoading}
+          cartPayload={cartPayload}
+          cartQtyById={cartQtyById}
+          onRefresh={() => void fetchCart()}
+          onCartQtyChange={(itemId, value) =>
+            setCartQtyById((prev) => ({ ...prev, [itemId]: value }))
+          }
+          onUpdateItem={(itemId) => void updateCartItem(itemId)}
+          onRemoveItem={(itemId) => void removeCartItem(itemId)}
+          onClearCart={() => void clearCart()}
+        />
 
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={authForm.email}
-                  onChange={(event) =>
-                    setAuthForm((prev) => ({ ...prev, email: event.target.value }))
-                  }
-                  placeholder="you@example.com"
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={authForm.password}
-                  onChange={(event) =>
-                    setAuthForm((prev) => ({ ...prev, password: event.target.value }))
-                  }
-                />
-              </label>
-              <button
-                onClick={submitAuthForm}
-                disabled={isAuthSubmitting}
-              >
-                {isAuthSubmitting
-                  ? "Submitting..."
-                  : authMode === "login"
-                  ? "Login"
-                  : "Create account"}
-              </button>
-            </div>
-          ) : (
-            <div className="stack">
-              <p className="chip">
-                {user?.name || user?.email} ({user?.role || "user"})
-              </p>
-              <button className="ghost" onClick={() => void fetchMe()}>
-                Refresh profile
-              </button>
-            </div>
-          )}
-        </section>
+        <AddressesPanel
+          isLoggedIn={isLoggedIn}
+          addressForm={addressForm}
+          addressLoading={addressLoading}
+          addresses={addresses}
+          selectedAddressId={selectedAddressId}
+          onRefresh={() => void fetchAddresses()}
+          onAddressFieldChange={(field, value) =>
+            setAddressForm((prev) => ({ ...prev, [field]: value }))
+          }
+          onSave={() => void createAddress()}
+          onSelectAddress={setSelectedAddressId}
+        />
 
-        <section className="panel panel-wide">
-          <div className="panel-head">
-            <h2>Products</h2>
-            <button className="ghost" onClick={() => void fetchProducts()}>
-              Refresh
-            </button>
-          </div>
-
-          <div className="filters">
-            <label>
-              Search
-              <input
-                value={filters.search}
-                onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    page: 1,
-                    search: event.target.value,
-                  }))
-                }
-                placeholder="title or brand"
-              />
-            </label>
-            <label>
-              Category
-              <select
-                value={filters.categorySlug}
-                onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    page: 1,
-                    categorySlug: event.target.value,
-                  }))
-                }
-              >
-                <option value="">All categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.slug}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Sort
-              <select
-                value={filters.sort}
-                onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    page: 1,
-                    sort: event.target.value,
-                  }))
-                }
-              >
-                <option value="newest">Newest</option>
-                <option value="price_asc">Price low-high</option>
-                <option value="price_desc">Price high-low</option>
-              </select>
-            </label>
-          </div>
-
-          {productsLoading ? <p>Loading products...</p> : null}
-
-          <div className="product-grid">
-            {products.map((product) => (
-              <article key={product.id} className="product-card">
-                <h3>{product.title}</h3>
-                <p className="muted">
-                  {product.brand || "No brand"} | Stock: {product.stockQty}
-                </p>
-                <p className="price">{formatMoneyFromPaise(product.price)}</p>
-                {product.mrp ? (
-                  <p className="muted">MRP: {formatMoneyFromPaise(product.mrp)}</p>
-                ) : null}
-                <p className="muted">{product.category?.name || "Uncategorized"}</p>
-
-                <div className="inline-actions">
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={productQtyById[product.id] || 1}
-                    onChange={(event) =>
-                      setProductQtyById((prev) => ({
-                        ...prev,
-                        [product.id]: Number(event.target.value),
-                      }))
-                    }
-                  />
-                  <button
-                    onClick={() => void addToCart(product.id)}
-                    disabled={addToCartLoading === product.id}
-                  >
-                    {addToCartLoading === product.id ? "Adding..." : "Add to cart"}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="pager">
-            <button
-              className="ghost"
-              disabled={pagination.page <= 1}
-              onClick={() =>
-                setFilters((prev) => ({
-                  ...prev,
-                  page: Math.max(1, prev.page - 1),
-                }))
-              }
-            >
-              Prev
-            </button>
-            <span>
-              Page {pagination.page} / {Math.max(1, pagination.totalPages)}
-            </span>
-            <button
-              className="ghost"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() =>
-                setFilters((prev) => ({
-                  ...prev,
-                  page: Math.min(pagination.totalPages, prev.page + 1),
-                }))
-              }
-            >
-              Next
-            </button>
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Cart</h2>
-            <button className="ghost" onClick={() => void fetchCart()}>
-              Refresh
-            </button>
-          </div>
-
-          {!isLoggedIn ? <p className="muted">Login to manage cart.</p> : null}
-          {cartLoading ? <p>Loading cart...</p> : null}
-
-          {cartPayload?.cart.items.length ? (
-            <div className="stack">
-              {cartPayload.cart.items.map((item) => (
-                <div key={item.id} className="list-row">
-                  <div>
-                    <strong>{item.product.title}</strong>
-                    <p className="muted">{formatMoneyFromPaise(item.product.price)}</p>
-                  </div>
-                  <div className="inline-actions">
-                    <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={cartQtyById[item.id] ?? item.quantity}
-                      onChange={(event) =>
-                        setCartQtyById((prev) => ({
-                          ...prev,
-                          [item.id]: Number(event.target.value),
-                        }))
-                      }
-                    />
-                    <button className="ghost" onClick={() => void updateCartItem(item.id)}>
-                      Update
-                    </button>
-                    <button className="ghost danger" onClick={() => void removeCartItem(item.id)}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <p className="price">Subtotal: {formatMoneyFromPaise(cartPayload.subtotal)}</p>
-              <button className="ghost danger" onClick={() => void clearCart()}>
-                Clear cart
-              </button>
-            </div>
-          ) : (
-            <p className="muted">Cart is empty.</p>
-          )}
-        </section>
-
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Addresses</h2>
-            <button className="ghost" onClick={() => void fetchAddresses()}>
-              Refresh
-            </button>
-          </div>
-
-          {!isLoggedIn ? <p className="muted">Login to manage addresses.</p> : null}
-
-          <div className="stack">
-            <label>
-              Full name
-              <input
-                value={addressForm.fullName}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, fullName: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                value={addressForm.phone}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, phone: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Line 1
-              <input
-                value={addressForm.line1}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, line1: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Line 2
-              <input
-                value={addressForm.line2}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, line2: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              City
-              <input
-                value={addressForm.city}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, city: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              State
-              <input
-                value={addressForm.state}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, state: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Postal code
-              <input
-                value={addressForm.postalCode}
-                onChange={(event) =>
-                  setAddressForm((prev) => ({ ...prev, postalCode: event.target.value }))
-                }
-              />
-            </label>
-            <button onClick={() => void createAddress()} disabled={addressLoading || !isLoggedIn}>
-              {addressLoading ? "Saving..." : "Save address"}
-            </button>
-          </div>
-
-          <div className="stack top-gap">
-            {addresses.map((address) => (
-              <label key={address.id} className="address-card">
-                <input
-                  type="radio"
-                  name="selected-address"
-                  checked={selectedAddressId === address.id}
-                  onChange={() => setSelectedAddressId(address.id)}
-                />
-                <span>
-                  {address.fullName}, {address.line1}, {address.city}, {address.state} {address.postalCode}
-                  {address.isDefault ? " (default)" : ""}
-                </span>
-              </label>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel panel-wide">
-          <div className="panel-head">
-            <h2>Orders and Payment</h2>
-            <button className="ghost" onClick={() => void fetchOrders()}>
-              Refresh
-            </button>
-          </div>
-
-          <div className="inline-actions">
-            <button onClick={() => void placeOrder()} disabled={!isLoggedIn || placingOrder}>
-              {placingOrder ? "Placing..." : "Place order from cart"}
-            </button>
-            <span className="muted">
-              Selected address: {selectedAddressId ? selectedAddressId.slice(0, 8) : "none"}
-            </span>
-          </div>
-
-          {ordersLoading ? <p>Loading orders...</p> : null}
-
-          <div className="stack top-gap">
-            {orders.map((order) => (
-              <div key={order.id} className="list-row">
-                <div>
-                  <strong>{order.id.slice(0, 8)}...</strong>
-                  <p className="muted">
-                    {order.status} | {formatDecimalMoney(order.total)} | {order._count.items} items
-                  </p>
-                </div>
-                <div className="inline-actions">
-                  <button className="ghost" onClick={() => void fetchOrderDetail(order.id)}>
-                    Details
-                  </button>
-                  {order.status === "PENDING" && isLoggedIn ? (
-                    <PayNowButton
-                      orderId={order.id}
-                      token={token}
-                      onSuccess={async () => {
-                        setNotice({ type: "success", text: "Payment verified. Order marked paid." });
-                        await fetchOrders();
-                        await fetchOrderDetail(order.id);
-                      }}
-                      onError={(message) => setNotice({ type: "error", text: message })}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            ))}
-            {orders.length === 0 ? <p className="muted">No orders yet.</p> : null}
-          </div>
-
-          {orderDetail ? (
-            <div className="detail-card">
-              <h3>Order detail: {orderDetail.id}</h3>
-              <p className="muted">
-                Status: {orderDetail.status} | Total: {formatDecimalMoney(orderDetail.total)}
-              </p>
-              <p className="muted">
-                Ship to: {orderDetail.address.fullName}, {orderDetail.address.line1}, {orderDetail.address.city}
-              </p>
-              <ul>
-                {orderDetail.items.map((item) => (
-                  <li key={item.id}>
-                    {item.product.title} x {item.quantity} @ {formatDecimalMoney(item.unitPrice)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </section>
+        <OrdersPanel
+          isLoggedIn={isLoggedIn}
+          token={token}
+          selectedAddressId={selectedAddressId}
+          placingOrder={placingOrder}
+          ordersLoading={ordersLoading}
+          orders={orders}
+          orderDetail={orderDetail}
+          onRefresh={() => void fetchOrders()}
+          onPlaceOrder={() => void placeOrder()}
+          onDetails={(orderId) => void fetchOrderDetail(orderId)}
+          onPaymentSuccess={async (orderId) => {
+            setNotice({ type: "success", text: "Payment verified. Order marked paid." });
+            await fetchOrders();
+            await fetchOrderDetail(orderId);
+          }}
+          onPaymentError={(message) => setNotice({ type: "error", text: message })}
+        />
       </main>
     </div>
   );
